@@ -3,12 +3,14 @@ import logging
 from typing import Dict, List, Optional, Sequence
 
 from langchain_core.documents import Document
+
 from langchain_community.document_loaders.base import BaseLoader
 
 logger = logging.getLogger(__name__)
 
+
 class MongodbLoader(BaseLoader):
-    """Class for loading documents from a MongoDB database."""
+    """Load MongoDB documents."""
 
     def __init__(
         self,
@@ -22,16 +24,24 @@ class MongodbLoader(BaseLoader):
         include_db_collection_in_metadata: bool = True
     ) -> None:
         """
-        Initializes the MongoDB loader with necessary database connection details and configurations.
+        Initializes the MongoDB loader with necessary database connection
+        details and configurations.
         
         Args:
-            connection_string (str): MongoDB connection URI.
-            db_name (str): Name of the database to connect to.
-            collection_name (str): Name of the collection to fetch documents from.
-            filter_criteria (Optional[Dict]): MongoDB filter criteria for querying documents.
-            field_names (Optional[Sequence[str]]): List of field names to retrieve from documents.
-            metadata (Optional[Sequence[str]]): Additional metadata fields to extract from documents.
-            include_db_collection_in_metadata (bool): Flag to include database and collection names in metadata.
+            connection_string (str):
+                MongoDB connection URI.
+            db_name (str):
+                Name of the database to connect to.
+            collection_name (str):
+                Name of the collection to fetch documents from.
+            filter_criteria (Optional[Dict]):
+                MongoDB filter criteria for querying documents.
+            field_names (Optional[Sequence[str]]):
+                List of field names to retrieve from documents.
+            metadata (Optional[Sequence[str]]):
+                Additional metadata fields to extract from documents.
+            include_db_collection_in_metadata (bool):
+                Flag to include database and collection names in metadata.
         
         Raises:
             ImportError: If the motor library is not installed.
@@ -62,7 +72,17 @@ class MongodbLoader(BaseLoader):
         self.include_db_collection_in_metadata = include_db_collection_in_metadata
 
     def load(self) -> List[Document]:
-        """Synchronously loads documents as a list of Document objects."""
+        """Load data into Document objects.
+
+        Attention:
+
+        This implementation starts an asyncio event loop which
+        will only work if running in a sync env. In an async env, it should
+        fail since there is already an event loop running.
+
+        This code should be updated to kick off the event loop from a separate
+        thread if running within an async context.
+        """
         return asyncio.run(self.aload())
 
     async def aload(self) -> List[Document]:
@@ -96,7 +116,8 @@ class MongodbLoader(BaseLoader):
         return result
 
     def _construct_projection(self):
-        """Constructs the projection dictionary for MongoDB query based on the specified field names."""
+        """Constructs the projection dictionary for MongoDB query based
+        on the specified field names."""
         return {field: 1 for field in self.field_names} if self.field_names else None
 
     def _extract_fields(self, document, fields, default=""):
