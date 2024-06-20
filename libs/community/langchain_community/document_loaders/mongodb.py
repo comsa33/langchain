@@ -56,20 +56,23 @@ class MongodbLoader(BaseLoader):
         
         if not connection_string:
             raise ValueError("connection_string must be provided.")
+
         if not db_name:
             raise ValueError("db_name must be provided.")
+
         if not collection_name:
             raise ValueError("collection_name must be provided.")
 
         self.client = AsyncIOMotorClient(connection_string)
-        self.db = self.client.get_database(db_name)
-        self.collection = self.db.get_collection(collection_name)
         self.db_name = db_name
         self.collection_name = collection_name
         self.field_names = field_names
         self.filter_criteria = filter_criteria or {}
         self.metadata_names = metadata_names or []
         self.include_db_collection_in_metadata = include_db_collection_in_metadata
+
+        self.db = self.client.get_database(db_name)
+        self.collection = self.db.get_collection(collection_name)
 
     def load(self) -> List[Document]:
         """Load data into Document objects.
@@ -86,10 +89,11 @@ class MongodbLoader(BaseLoader):
         return asyncio.run(self.aload())
 
     async def aload(self) -> List[Document]:
-        """Asynchronously loads documents into Document objects."""
+        """Asynchronously loads data into Document objects."""
         result = []
-        projection = self._construct_projection()
         total_docs = await self.collection.count_documents(self.filter_criteria)
+
+        projection = self._construct_projection()
 
         async for doc in self.collection.find(self.filter_criteria, projection):
             metadata = self._extract_fields(doc, self.metadata_names, default="")
@@ -101,10 +105,14 @@ class MongodbLoader(BaseLoader):
                     "collection": self.collection_name
                 })
 
-            fields = self._extract_fields(doc, self.field_names, default="")
-            
-            # Combine text from the extracted fields
-            text = " ".join(str(value) for value in fields.values())
+             # Extract text content from filtered fields or use the entire document
+            if self.field_names is not None:
+                fields = self._extract_fields(doc, self.field_names, default="")
+                texts = [str(value) for value in fields.values()]
+                text = " ".join(texts)
+            else:
+                text = str(doc)
+
             result.append(Document(page_content=text, metadata=metadata))
 
         if len(result) != total_docs:
@@ -117,8 +125,11 @@ class MongodbLoader(BaseLoader):
 
     def _construct_projection(self):
         """Constructs the projection dictionary for MongoDB query based
-        on the specified field names."""
-        return {field: 1 for field in self.field_names} if self.field_names else None
+        on the specified field names and metadata names."""
+        field_names = self.field_names if self.field_names else []
+        metadata_names = self.metadata_names if self.metadata_names else []
+        all_fields = field_names + metadata_names
+        return {field: 1 for field in all_fields} if all_fields else None
 
     def _extract_fields(self, document, fields, default=""):
         """
